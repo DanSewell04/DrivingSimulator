@@ -1,159 +1,116 @@
+
 using UnityEngine;
-using System;
-using System.Collections.Generic;
+using UnityEngine.InputSystem;
 
 public class CarMovement : MonoBehaviour
 {
-    public enum ControlMode
-    {
-        Keyboard,
-        Buttons
-    }
+    InputAction accelerate, brakePedal, turn;
 
-    public enum Axel
-    {
-        Front,
-        Rear
-    }
+    CharacterController characterController;
+    public Transform cameraContainer;
 
-    [Serializable]
-    public struct Wheel
-    {
-        public GameObject wheelModel;
-        public WheelCollider wheelCollider;
-        public GameObject wheelEffectObj;
-        public ParticleSystem smokeParticle;
-        public Axel axel;
-    }
+    public float maxSpeed = 10f;
+    float speed = 0f;
+    float accelerationMutliplier = 0.2f;
+    float defaultDrag = 0.01f;
+    float breakDrag = 0.1f;
+    float drag = 0.2f;
 
-    public ControlMode control;
+    public float mouseSensitivity = 0.2f;
+    public float gravity = 20.0f;
+    public float lookUpClamp = -5f;
+    public float lookDownClamp = 20f;
 
-    public float maxAcceleration = 30.0f;
-    public float brakeAcceleration = 50.0f;
-
-    public float turnSensitivity = 1.0f;
-    public float maxSteerAngle = 30.0f;
-
-    public Vector3 _centerOfMass;
-
-    public List<Wheel> wheels;
-
-    float moveInput;
-    float steerInput;
-
-    private Rigidbody carRb;
-
+    Vector3 moveDirection = Vector3.zero;
+    float rotateYaw, rotatePitch;
 
     void Start()
     {
-        carRb = GetComponent<Rigidbody>();
-        carRb.centerOfMass = _centerOfMass;
+        Cursor.visible = false;
+        characterController = GetComponent<CharacterController>();
 
-        
+        GameManager.InputManager.inputActions.Wheel.Accelerate.Enable();
+        GameManager.InputManager.inputActions.Wheel.Brake.Enable();
+        GameManager.InputManager.inputActions.Wheel.Steering.Enable();
     }
 
     void Update()
     {
-        GetInputs();
-        AnimateWheels();
-        WheelEffects();
+        RotateAndLook();
     }
 
-    void LateUpdate()
+    void FixedUpdate()
     {
-        Move();
-        Steer();
-        Brake();
+        Debug.Log("Turn: " + turn.ReadValue<Vector2>().x);
+        Debug.Log("Accelerate: " + accelerate.ReadValue<float>());
+        Debug.Log("Break Pedal: " + brakePedal.ReadValue<float>());
+
+        Locomotion();
     }
 
-    public void MoveInput(float input)
+    private void OnEnable()
     {
-        moveInput = input;
+        turn = GameManager.InputManager.inputActions.Wheel.Steering;
+        turn.Enable();
+
+        accelerate = GameManager.InputManager.inputActions.Wheel.Accelerate;
+        accelerate.Enable();
+
+        brakePedal = GameManager.InputManager.inputActions.Wheel.Brake;
+        brakePedal.Enable();
     }
 
-    public void SteerInput(float input)
+    private void OnDisable()
     {
-        steerInput = input;
+        turn.Disable();
+        accelerate.Disable();
+        brakePedal.Disable();
     }
 
-    void GetInputs()
+    void Locomotion()
     {
-        if (control == ControlMode.Keyboard)
+        if (characterController.isGrounded) // When grounded, set y-axis to zero (to ignore it)
         {
-            moveInput = Input.GetAxis("Vertical");
-            steerInput = Input.GetAxis("Horizontal");
-        }
-    }
+            float acceleration = accelerate.ReadValue<float>();
+            float breaking = brakePedal.ReadValue<float>();
+            float turning = turn.ReadValue<Vector2>().x;
 
-    void Move()
-    {
-        foreach (var wheel in wheels)
-        {
-            wheel.wheelCollider.motorTorque = moveInput * 600 * maxAcceleration * Time.deltaTime;
-        }
-    }
+            drag = 1 - defaultDrag - (breakDrag * breaking);
 
-    void Steer()
-    {
-        foreach (var wheel in wheels)
-        {
-            if (wheel.axel == Axel.Front)
+            speed += acceleration * accelerationMutliplier;
+            speed *= drag;
+
+            if (speed <= 0.1)
             {
-                var _steerAngle = steerInput * turnSensitivity * maxSteerAngle;
-                wheel.wheelCollider.steerAngle = Mathf.Lerp(wheel.wheelCollider.steerAngle, _steerAngle, 0.6f);
+                speed = 0;
             }
-        }
-    }
-
-    void Brake()
-    {
-        if (Input.GetKey(KeyCode.Space) || moveInput == 0)
-        {
-            foreach (var wheel in wheels)
+            else if (speed >= maxSpeed)
             {
-                wheel.wheelCollider.brakeTorque = 300 * brakeAcceleration * Time.deltaTime;
+                speed = maxSpeed;
             }
 
-            
-        }
-        else
-        {
-            foreach (var wheel in wheels)
-            {
-                wheel.wheelCollider.brakeTorque = 0;
-            }
+            moveDirection = new Vector3(0f, 0f, speed);
+            moveDirection = transform.TransformDirection(moveDirection);
 
-            
+            turning *= speed;
+            turning = Mathf.Clamp(turning, -5f, +5f);
+            transform.Rotate(0f, turning, 0f);
         }
+
+        moveDirection.y -= gravity * Time.deltaTime;
+        characterController.Move(moveDirection * Time.deltaTime);
     }
 
-    void AnimateWheels()
+    void RotateAndLook()
     {
-        foreach (var wheel in wheels)
-        {
-            Quaternion rot;
-            Vector3 pos;
-            wheel.wheelCollider.GetWorldPose(out pos, out rot);
-            wheel.wheelModel.transform.position = pos;
-            wheel.wheelModel.transform.rotation = rot;
-        }
-    }
+        //Vector2 lookInput = look.ReadValue<Vector2>();
 
-    void WheelEffects()
-    {
-        foreach (var wheel in wheels)
-        {
-            //var dirtParticleMainSettings = wheel.smokeParticle.main;
+        //rotateYaw = lookInput.x * mouseSensitivity;
+        //rotateYaw += cameraContainer.transform.localRotation.eulerAngles.y;
 
-            if (Input.GetKey(KeyCode.Space) && wheel.axel == Axel.Rear && wheel.wheelCollider.isGrounded == true && carRb.velocity.magnitude >= 10.0f)
-            {
-                wheel.wheelEffectObj.GetComponentInChildren<TrailRenderer>().emitting = true;
-                wheel.smokeParticle.Emit(1);
-            }
-            else
-            {
-                wheel.wheelEffectObj.GetComponentInChildren<TrailRenderer>().emitting = false;
-            }
-        }
+        //rotatePitch -= lookInput.y * mouseSensitivity;
+        //rotatePitch = Mathf.Clamp(rotatePitch, lookUpClamp, lookDownClamp);
+
+        //cameraContainer.transform.localRotation = Quaternion.Euler(rotatePitch, rotateYaw, 0f);
     }
 }
