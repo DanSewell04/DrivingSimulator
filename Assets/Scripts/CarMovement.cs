@@ -17,7 +17,7 @@ public class CarMovement : MonoBehaviour
     float drag = 0.2f;
 
     public float mouseSensitivity = 0.2f;
-    public float gravity = 20.0f;
+    public float gravity = 100.0f;
     public float lookUpClamp = -5f;
     public float lookDownClamp = 20f;
 
