@@ -10,16 +10,16 @@ public class CarMovement : MonoBehaviour
     public Transform cameraContainer;
 
     public float maxSpeed = 10f;
-    float speed = 0f;
-    float accelerationMutliplier = 0.2f;
+    public float speed = 0f;
+    public float accelerationMutliplier = 20f;
     float defaultDrag = 0.01f;
     float breakDrag = 0.1f;
     float drag = 0.2f;
 
-    public float mouseSensitivity = 0.2f;
+    public float mouseSensitivity;
     public float gravity = 100.0f;
-    public float lookUpClamp = -5f;
-    public float lookDownClamp = 20f;
+    public float lookUpClamp;
+    public float lookDownClamp;
 
     Vector3 moveDirection = Vector3.zero;
     float rotateYaw, rotatePitch;
